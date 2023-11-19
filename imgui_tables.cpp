@@ -478,8 +478,8 @@ bool    ImGui::BeginTableEx(const char* name, ImGuiID id, int columns_count, ImG
     table->DeclColumnsCount = 0;
 
     // Using opaque colors facilitate overlapping elements of the grid
-    table->BorderColorStrong = GetColorU32(ImGuiCol_TableBorderStrong);
-    table->BorderColorLight = GetColorU32(ImGuiCol_TableBorderLight);
+    table->BorderColorStrong = GetColor(ImGuiCol_TableBorderStrong);
+    table->BorderColorLight = GetColor(ImGuiCol_TableBorderLight);
 
     // Make table current
     g.CurrentTable = table;
@@ -1653,14 +1653,14 @@ int ImGui::TableGetHoveredColumn()
     return (int)table->HoveredColumnBody;
 }
 
-void ImGui::TableSetBgColor(ImGuiTableBgTarget target, ImU32 color, int column_n)
+void ImGui::TableSetBgColor(ImGuiTableBgTarget target, ImCol color, int column_n)
 {
     ImGuiContext& g = *GImGui;
     ImGuiTable* table = g.CurrentTable;
     IM_ASSERT(target != ImGuiTableBgTarget_None);
 
-    if (color == IM_COL32_DISABLE)
-        color = 0;
+    // if (color == (ImCol) IM_COL32_DISABLE)
+    //     color = IM_COL32_BLACK_TRANS;
 
     // We cannot draw neither the cell or row background immediately as we don't know the row height at this point in time.
     switch (target)
@@ -1688,6 +1688,7 @@ void ImGui::TableSetBgColor(ImGuiTableBgTarget target, ImU32 color, int column_n
         IM_ASSERT(column_n == -1);
         int bg_idx = (target == ImGuiTableBgTarget_RowBg1) ? 1 : 0;
         table->RowBgColor[bg_idx] = color;
+        table->RowBgColorEnabled[bg_idx] = true;
         break;
     }
     default:
@@ -1748,7 +1749,8 @@ void ImGui::TableBeginRow(ImGuiTable* table)
     // New row
     table->CurrentRow++;
     table->CurrentColumn = -1;
-    table->RowBgColor[0] = table->RowBgColor[1] = IM_COL32_DISABLE;
+    // table->RowBgColor[0] = table->RowBgColor[1] = IM_COL32_DISABLE;
+    table->RowBgColorEnabled[0] = table->RowBgColorEnabled[1] = false;
     table->RowCellDataCurrent = -1;
     table->IsInsideRow = true;
 
@@ -1768,7 +1770,7 @@ void ImGui::TableBeginRow(ImGuiTable* table)
     // Making the header BG color non-transparent will allow us to overlay it multiple times when handling smooth dragging.
     if (table->RowFlags & ImGuiTableRowFlags_Headers)
     {
-        TableSetBgColor(ImGuiTableBgTarget_RowBg0, GetColorU32(ImGuiCol_TableHeaderBg));
+        TableSetBgColor(ImGuiTableBgTarget_RowBg0, GetColor(ImGuiCol_TableHeaderBg));
         if (table->CurrentRow == 0)
             table->IsUsingHeaders = true;
     }
@@ -1805,17 +1807,17 @@ void ImGui::TableEndRow(ImGuiTable* table)
     if (is_visible)
     {
         // Decide of background color for the row
-        ImU32 bg_col0 = 0;
-        ImU32 bg_col1 = 0;
-        if (table->RowBgColor[0] != IM_COL32_DISABLE)
+        ImCol bg_col0 = IM_COL32_BLACK_TRANS;
+        ImCol bg_col1 = IM_COL32_BLACK_TRANS;
+        if (table->RowBgColorEnabled[0])
             bg_col0 = table->RowBgColor[0];
         else if (table->Flags & ImGuiTableFlags_RowBg)
-            bg_col0 = GetColorU32((table->RowBgColorCounter & 1) ? ImGuiCol_TableRowBgAlt : ImGuiCol_TableRowBg);
-        if (table->RowBgColor[1] != IM_COL32_DISABLE)
+            bg_col0 = GetColor((table->RowBgColorCounter & 1) ? ImGuiCol_TableRowBgAlt : ImGuiCol_TableRowBg);
+        if (table->RowBgColorEnabled[1])
             bg_col1 = table->RowBgColor[1];
 
         // Decide of top border color
-        ImU32 border_col = 0;
+        ImCol border_col = IM_COL32_BLACK_TRANS;
         const float border_size = TABLE_BORDER_SIZE;
         if (table->CurrentRow > 0 || table->InnerWindow == table->OuterWindow)
             if (table->Flags & ImGuiTableFlags_BordersInnerH)
@@ -1823,24 +1825,30 @@ void ImGui::TableEndRow(ImGuiTable* table)
 
         const bool draw_cell_bg_color = table->RowCellDataCurrent >= 0;
         const bool draw_strong_bottom_border = unfreeze_rows_actual;
-        if ((bg_col0 | bg_col1 | border_col) != 0 || draw_strong_bottom_border || draw_cell_bg_color)
-        {
-            // In theory we could call SetWindowClipRectBeforeSetChannel() but since we know TableEndRow() is
-            // always followed by a change of clipping rectangle we perform the smallest overwrite possible here.
-            if ((table->Flags & ImGuiTableFlags_NoClip) == 0)
-                window->DrawList->_CmdHeader.ClipRect = table->Bg0ClipRectForDrawCmd.ToVec4();
-            table->DrawSplitter->SetCurrentChannel(window->DrawList, TABLE_DRAW_CHANNEL_BG0);
+        // TODO: implement properly
+        if ((!IM_COLOR_IS_TRANSPARENT(bg_col0) ||
+             !IM_COLOR_IS_TRANSPARENT(bg_col1) ||
+             !IM_COLOR_IS_TRANSPARENT(border_col)) ||
+            draw_strong_bottom_border || draw_cell_bg_color) {
+          // In theory we could call SetWindowClipRectBeforeSetChannel() but
+          // since we know TableEndRow() is always followed by a change of
+          // clipping rectangle we perform the smallest overwrite possible here.
+          if ((table->Flags & ImGuiTableFlags_NoClip) == 0)
+            window->DrawList->_CmdHeader.ClipRect =
+                table->Bg0ClipRectForDrawCmd.ToVec4();
+          table->DrawSplitter->SetCurrentChannel(window->DrawList,
+                                                 TABLE_DRAW_CHANNEL_BG0);
         }
 
         // Draw row background
         // We soft/cpu clip this so all backgrounds and borders can share the same clipping rectangle
-        if (bg_col0 || bg_col1)
+        if (!IM_COLOR_IS_TRANSPARENT(bg_col0) || !IM_COLOR_IS_TRANSPARENT(bg_col1))
         {
             ImRect row_rect(table->WorkRect.Min.x, bg_y1, table->WorkRect.Max.x, bg_y2);
             row_rect.ClipWith(table->BgClipRect);
-            if (bg_col0 != 0 && row_rect.Min.y < row_rect.Max.y)
+            if (!IM_COLOR_IS_TRANSPARENT(bg_col0) && row_rect.Min.y < row_rect.Max.y)
                 window->DrawList->AddRectFilled(row_rect.Min, row_rect.Max, bg_col0);
-            if (bg_col1 != 0 && row_rect.Min.y < row_rect.Max.y)
+            if (!IM_COLOR_IS_TRANSPARENT(bg_col1) && row_rect.Min.y < row_rect.Max.y)
                 window->DrawList->AddRectFilled(row_rect.Min, row_rect.Max, bg_col1);
         }
 
@@ -1862,7 +1870,7 @@ void ImGui::TableEndRow(ImGuiTable* table)
         }
 
         // Draw top border
-        if (border_col && bg_y1 >= table->BgClipRect.Min.y && bg_y1 < table->BgClipRect.Max.y)
+        if (!IM_COLOR_IS_TRANSPARENT(border_col) && bg_y1 >= table->BgClipRect.Min.y && bg_y1 < table->BgClipRect.Max.y)
             window->DrawList->AddLine(ImVec2(table->BorderX1, bg_y1), ImVec2(table->BorderX2, bg_y1), border_col, border_size);
 
         // Draw bottom border at the row unfreezing mark (always strong)
@@ -2585,12 +2593,12 @@ void ImGui::TableDrawBorders(ImGuiTable* table)
 
             // Draw in outer window so right-most column won't be clipped
             // Always draw full height border when being resized/hovered, or on the delimitation of frozen column scrolling.
-            ImU32 col;
+            ImCol col;
             float draw_y2;
             if (is_hovered || is_resized || is_frozen_separator)
             {
                 draw_y2 = draw_y2_body;
-                col = is_resized ? GetColorU32(ImGuiCol_SeparatorActive) : is_hovered ? GetColorU32(ImGuiCol_SeparatorHovered) : table->BorderColorStrong;
+                col = is_resized ? GetColor(ImGuiCol_SeparatorActive) : is_hovered ? GetColor(ImGuiCol_SeparatorHovered) : table->BorderColorStrong;
             }
             else
             {
@@ -2613,7 +2621,7 @@ void ImGui::TableDrawBorders(ImGuiTable* table)
         // of it in inner window, and the part that's over scrollbars in the outer window..)
         // Either solution currently won't allow us to use a larger border size: the border would clipped.
         const ImRect outer_border = table->OuterRect;
-        const ImU32 outer_col = table->BorderColorStrong;
+        const ImCol outer_col = table->BorderColorStrong;
         if ((table->Flags & ImGuiTableFlags_BordersOuter) == ImGuiTableFlags_BordersOuter)
         {
             inner_drawlist->AddRect(outer_border.Min, outer_border.Max, outer_col, 0.0f, 0, border_size);
@@ -2972,7 +2980,7 @@ void ImGui::TableHeader(const char* label)
         SetItemAllowOverlap();
     if (held || hovered || selected)
     {
-        const ImU32 col = GetColorU32(held ? ImGuiCol_HeaderActive : hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+        const ImCol col = GetColor(held ? ImGuiCol_HeaderActive : hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
         //RenderFrame(bb.Min, bb.Max, col, false, 0.0f);
         TableSetBgColor(ImGuiTableBgTarget_CellBg, col, table->CurrentColumn);
     }
@@ -2980,7 +2988,7 @@ void ImGui::TableHeader(const char* label)
     {
         // Submit single cell bg color in the case we didn't submit a full header row
         if ((table->RowFlags & ImGuiTableRowFlags_Headers) == 0)
-            TableSetBgColor(ImGuiTableBgTarget_CellBg, GetColorU32(ImGuiCol_TableHeaderBg), table->CurrentColumn);
+            TableSetBgColor(ImGuiTableBgTarget_CellBg, GetColor(ImGuiCol_TableHeaderBg), table->CurrentColumn);
     }
     RenderNavHighlight(bb, id, ImGuiNavHighlightFlags_TypeThin | ImGuiNavHighlightFlags_NoRounding);
     if (held)
@@ -3023,7 +3031,7 @@ void ImGui::TableHeader(const char* label)
                 PopStyleColor();
                 x += w_sort_text;
             }
-            RenderArrow(window->DrawList, ImVec2(x, y), GetColorU32(ImGuiCol_Text), column->SortDirection == ImGuiSortDirection_Ascending ? ImGuiDir_Up : ImGuiDir_Down, ARROW_SCALE);
+            RenderArrow(window->DrawList, ImVec2(x, y), GetColor(ImGuiCol_Text), column->SortDirection == ImGuiSortDirection_Ascending ? ImGuiDir_Up : ImGuiDir_Down, ARROW_SCALE);
         }
 
         // Handle clicking on column header to adjust Sort Order
@@ -4072,7 +4080,7 @@ void ImGui::EndColumns()
             }
 
             // Draw column
-            const ImU32 col = GetColorU32(held ? ImGuiCol_SeparatorActive : hovered ? ImGuiCol_SeparatorHovered : ImGuiCol_Separator);
+            const ImCol col = GetColor(held ? ImGuiCol_SeparatorActive : hovered ? ImGuiCol_SeparatorHovered : ImGuiCol_Separator);
             const float xi = IM_FLOOR(x);
             window->DrawList->AddLine(ImVec2(xi, y1 + 1.0f), ImVec2(xi, y2), col);
         }

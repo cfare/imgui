@@ -167,12 +167,17 @@ typedef khronos_uint8_t GLubyte;
 #define GL_SCISSOR_TEST                   0x0C11
 #define GL_UNPACK_ROW_LENGTH              0x0CF2
 #define GL_PACK_ALIGNMENT                 0x0D05
+#define GL_TEXTURE_1D                     0x0DE0
 #define GL_TEXTURE_2D                     0x0DE1
 #define GL_UNSIGNED_BYTE                  0x1401
 #define GL_UNSIGNED_SHORT                 0x1403
 #define GL_UNSIGNED_INT                   0x1405
 #define GL_FLOAT                          0x1406
 #define GL_RGBA                           0x1908
+#define GL_SRGB8_ALPHA8                   0x8C43
+#define GL_FRAMEBUFFER                    0x8D40
+#define GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING 0x8210
+#define GL_BACK_LEFT                      0x0402
 #define GL_FILL                           0x1B02
 #define GL_VENDOR                         0x1F00
 #define GL_RENDERER                       0x1F01
@@ -184,6 +189,7 @@ typedef khronos_uint8_t GLubyte;
 typedef void (APIENTRYP PFNGLPOLYGONMODEPROC) (GLenum face, GLenum mode);
 typedef void (APIENTRYP PFNGLSCISSORPROC) (GLint x, GLint y, GLsizei width, GLsizei height);
 typedef void (APIENTRYP PFNGLTEXPARAMETERIPROC) (GLenum target, GLenum pname, GLint param);
+typedef void (APIENTRYP PFNGLTEXIMAGE1DPROC) (GLenum target, GLint level, GLint internalformat, GLsizei width, GLint border, GLenum format, GLenum type, const void *pixels);
 typedef void (APIENTRYP PFNGLTEXIMAGE2DPROC) (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels);
 typedef void (APIENTRYP PFNGLCLEARPROC) (GLbitfield mask);
 typedef void (APIENTRYP PFNGLCLEARCOLORPROC) (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha);
@@ -197,6 +203,7 @@ typedef void (APIENTRYP PFNGLGETINTEGERVPROC) (GLenum pname, GLint *data);
 typedef const GLubyte *(APIENTRYP PFNGLGETSTRINGPROC) (GLenum name);
 typedef GLboolean (APIENTRYP PFNGLISENABLEDPROC) (GLenum cap);
 typedef void (APIENTRYP PFNGLVIEWPORTPROC) (GLint x, GLint y, GLsizei width, GLsizei height);
+typedef void (APIENTRYP PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC) (GLenum target, GLenum attachment, GLenum pname, GLint *params);
 #ifdef GL_GLEXT_PROTOTYPES
 GLAPI void APIENTRY glPolygonMode (GLenum face, GLenum mode);
 GLAPI void APIENTRY glScissor (GLint x, GLint y, GLsizei width, GLsizei height);
@@ -245,6 +252,7 @@ GLAPI void APIENTRY glActiveTexture (GLenum texture);
 #define GL_BLEND_DST_ALPHA                0x80CA
 #define GL_BLEND_SRC_ALPHA                0x80CB
 #define GL_FUNC_ADD                       0x8006
+typedef void (APIENTRYP PFNGLBLENDFUNCPROC) (GLenum sfactor, GLenum dfactor);
 typedef void (APIENTRYP PFNGLBLENDFUNCSEPARATEPROC) (GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha);
 typedef void (APIENTRYP PFNGLBLENDEQUATIONPROC) (GLenum mode);
 #ifdef GL_GLEXT_PROTOTYPES
@@ -364,6 +372,7 @@ GLAPI const GLubyte *APIENTRY glGetStringi (GLenum name, GLuint index);
 GLAPI void APIENTRY glBindVertexArray (GLuint array);
 GLAPI void APIENTRY glDeleteVertexArrays (GLsizei n, const GLuint *arrays);
 GLAPI void APIENTRY glGenVertexArrays (GLsizei n, GLuint *arrays);
+GLAPI void APIENTRY glGetFramebufferAttachmentParameteriv (GLenum target, GLenum attachment, GLenum pname, GLint *params);
 #endif
 #endif /* GL_VERSION_3_0 */
 #ifndef GL_VERSION_3_1
@@ -478,6 +487,7 @@ union GL3WProcs {
         PFNGLBINDVERTEXARRAYPROC          BindVertexArray;
         PFNGLBLENDEQUATIONPROC            BlendEquation;
         PFNGLBLENDEQUATIONSEPARATEPROC    BlendEquationSeparate;
+        PFNGLBLENDFUNCPROC                BlendFunc;
         PFNGLBLENDFUNCSEPARATEPROC        BlendFuncSeparate;
         PFNGLBUFFERDATAPROC               BufferData;
         PFNGLBUFFERSUBDATAPROC            BufferSubData;
@@ -504,6 +514,7 @@ union GL3WProcs {
         PFNGLGENVERTEXARRAYSPROC          GenVertexArrays;
         PFNGLGETATTRIBLOCATIONPROC        GetAttribLocation;
         PFNGLGETERRORPROC                 GetError;
+        PFNGLGETFRAMEBUFFERATTACHMENTPARAMETERIVPROC GetFramebufferAttachmentParameteriv;
         PFNGLGETINTEGERVPROC              GetIntegerv;
         PFNGLGETPROGRAMINFOLOGPROC        GetProgramInfoLog;
         PFNGLGETPROGRAMIVPROC             GetProgramiv;
@@ -522,6 +533,7 @@ union GL3WProcs {
         PFNGLREADPIXELSPROC               ReadPixels;
         PFNGLSCISSORPROC                  Scissor;
         PFNGLSHADERSOURCEPROC             ShaderSource;
+        PFNGLTEXIMAGE1DPROC               TexImage1D;
         PFNGLTEXIMAGE2DPROC               TexImage2D;
         PFNGLTEXPARAMETERIPROC            TexParameteri;
         PFNGLUNIFORM1IPROC                Uniform1i;
@@ -543,6 +555,7 @@ GL3W_API extern union GL3WProcs imgl3wProcs;
 #define glBindVertexArray                 imgl3wProcs.gl.BindVertexArray
 #define glBlendEquation                   imgl3wProcs.gl.BlendEquation
 #define glBlendEquationSeparate           imgl3wProcs.gl.BlendEquationSeparate
+#define glBlendFunc                       imgl3wProcs.gl.BlendFunc
 #define glBlendFuncSeparate               imgl3wProcs.gl.BlendFuncSeparate
 #define glBufferData                      imgl3wProcs.gl.BufferData
 #define glBufferSubData                   imgl3wProcs.gl.BufferSubData
@@ -568,6 +581,7 @@ GL3W_API extern union GL3WProcs imgl3wProcs;
 #define glGenTextures                     imgl3wProcs.gl.GenTextures
 #define glGenVertexArrays                 imgl3wProcs.gl.GenVertexArrays
 #define glGetAttribLocation               imgl3wProcs.gl.GetAttribLocation
+#define glGetFramebufferAttachmentParameteriv   imgl3wProcs.gl.GetFramebufferAttachmentParameteriv
 #define glGetError                        imgl3wProcs.gl.GetError
 #define glGetIntegerv                     imgl3wProcs.gl.GetIntegerv
 #define glGetProgramInfoLog               imgl3wProcs.gl.GetProgramInfoLog
@@ -587,6 +601,7 @@ GL3W_API extern union GL3WProcs imgl3wProcs;
 #define glReadPixels                      imgl3wProcs.gl.ReadPixels
 #define glScissor                         imgl3wProcs.gl.Scissor
 #define glShaderSource                    imgl3wProcs.gl.ShaderSource
+#define glTexImage1D                      imgl3wProcs.gl.TexImage1D
 #define glTexImage2D                      imgl3wProcs.gl.TexImage2D
 #define glTexParameteri                   imgl3wProcs.gl.TexParameteri
 #define glUniform1i                       imgl3wProcs.gl.Uniform1i
@@ -741,6 +756,7 @@ static const char *proc_names[] = {
     "glBindVertexArray",
     "glBlendEquation",
     "glBlendEquationSeparate",
+    "glBlendFunc",
     "glBlendFuncSeparate",
     "glBufferData",
     "glBufferSubData",
@@ -767,6 +783,7 @@ static const char *proc_names[] = {
     "glGenVertexArrays",
     "glGetAttribLocation",
     "glGetError",
+    "glGetFramebufferAttachmentParameteriv",
     "glGetIntegerv",
     "glGetProgramInfoLog",
     "glGetProgramiv",
@@ -785,6 +802,7 @@ static const char *proc_names[] = {
     "glReadPixels",
     "glScissor",
     "glShaderSource",
+    "glTexImage1D",
     "glTexImage2D",
     "glTexParameteri",
     "glUniform1i",
@@ -799,8 +817,11 @@ GL3W_API union GL3WProcs imgl3wProcs;
 static void load_procs(GL3WGetProcAddressProc proc)
 {
     size_t i;
-    for (i = 0; i < ARRAY_SIZE(proc_names); i++)
+    for (i = 0; i < ARRAY_SIZE(proc_names); i++) {
         imgl3wProcs.ptr[i] = proc(proc_names[i]);
+        fprintf(stderr, "GL load: %s == %p\n", proc_names[i], imgl3wProcs.ptr[i]);
+    }
+
 }
 
 #ifdef __cplusplus

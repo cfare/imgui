@@ -211,6 +211,7 @@ struct ImGui_ImplOpenGL3_Data
     bool            GlProfileIsCompat;
     GLint           GlProfileMask;
     GLuint          FontTexture;
+    // GLuint          GradientTexture;    
     GLuint          ShaderHandle;
     GLint           AttribLocationTex;       // Uniforms location
     GLint           AttribLocationProjMtx;
@@ -389,7 +390,8 @@ static void ImGui_ImplOpenGL3_SetupRenderState(ImDrawData* draw_data, int fb_wid
     // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor enabled, polygon fill
     glEnable(GL_BLEND);
     glBlendEquation(GL_FUNC_ADD);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_STENCIL_TEST);
@@ -452,7 +454,8 @@ static void ImGui_ImplOpenGL3_SetupRenderState(ImDrawData* draw_data, int fb_wid
     GL_CALL(glEnableVertexAttribArray(bd->AttribLocationVtxColor));
     GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxPos,   2, GL_FLOAT,         GL_FALSE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, pos)));
     GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxUV,    2, GL_FLOAT,         GL_FALSE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, uv)));
-    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, col)));
+    // TODO: Update below depending on color setting
+    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxColor, 4, GL_FLOAT, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)IM_OFFSETOF(ImDrawVert, col)));
 }
 
 // OpenGL3 Render function.
@@ -652,7 +655,8 @@ bool ImGui_ImplOpenGL3_CreateFontsTexture()
     // Build texture atlas
     unsigned char* pixels;
     int width, height;
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);   // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
+    // io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    io.Fonts->GetTexDataAsRGBA64(&pixels, &width, &height);   // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
 
     // Upload texture to graphics system
     // (Bilinear sampling is required by default. Set 'io.Fonts->Flags |= ImFontAtlasFlags_NoBakedLines' or 'style.AntiAliasedLinesUseTex = false' to allow point/nearest sampling)
@@ -665,7 +669,8 @@ bool ImGui_ImplOpenGL3_CreateFontsTexture()
 #ifdef GL_UNPACK_ROW_LENGTH // Not on WebGL/ES
     GL_CALL(glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
 #endif
-    GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels));
+    GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_SHORT, pixels));
+    // GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels));
 
     // Store our identifier
     io.Fonts->SetTexID((ImTextureID)(intptr_t)bd->FontTexture);
@@ -675,6 +680,31 @@ bool ImGui_ImplOpenGL3_CreateFontsTexture()
 
     return true;
 }
+
+// // TODO: We may be able to shove this in the font atlas??
+// bool ImGui_ImplOpenGL3_CreateGradientTexture()
+// {
+//     ImGuiIO& io = ImGui::GetIO();
+//     ImGui_ImplOpenGL3_Data* bd = ImGui_ImplOpenGL3_GetBackendData();
+
+//     int width;
+//     unsigned int pixels[256];
+//     for (int i = 0; i < 256; i++) {
+//         pixels[i] = i;
+//     }
+
+//     // GLint last_texture;
+//     // GL_CALL(glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_texture));
+
+//     GL_CALL(glGenTextures(1, &bd->GradientTexture));
+//     GL_CALL(glBindTexture(GL_TEXTURE_1D, bd->GradientTexture));
+//     GL_CALL(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+//     GL_CALL(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+//     GL_CALL(glTexImage1D(GL_TEXTURE_1D, 0, GL_SRGB8_ALPHA8, width, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels));
+
+//     // Restore state
+//     // GL_CALL(glBindTexture(GL_TEXTURE_2D, last_texture));
+// }
 
 void ImGui_ImplOpenGL3_DestroyFontsTexture()
 {
@@ -686,6 +716,11 @@ void ImGui_ImplOpenGL3_DestroyFontsTexture()
         io.Fonts->SetTexID(0);
         bd->FontTexture = 0;
     }
+    // if (bd->GradientTexture)
+    // {
+    //     glDeleteTextures(1, &bd->GradientTexture);
+    //     bd->GradientTexture = 0;
+    // }
 }
 
 // If you get an error please report on github. You may try different GL context version or GLSL version. See GL<>GLSL version table at the top of this file.
